@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDoS Anomaly Detection (Single-Stage)</title>
+    <style>
+        :root {
+            --primary: #1e3c72;
+            --primary-light: #2a5298;
+            --secondary: #00b4db;
+            --success: #28a745;
+            --warning: #ffc107;
+            --danger: #dc3545;
+            --light: #f8f9fa;
+            --dark: #343a40;
+            --gray: #6c757d;
+            --gray-light: #e9ecef;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --transition: all 0.3s ease;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--dark);
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            overflow: hidden;
+        }
+        
+        header {
+            background: linear-gradient(to right, var(--primary), var(--primary-light));
+            color: white;
+            padding: 25px 30px;
+            position: relative;
+        }
+        
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+        
+        .status-indicator {
+            position: absolute;
+            top: 25px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.15);
+            padding: 8px 15px;
+            border-radius: 30px;
+            font-size: 0.9rem;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--warning);
+        }
+        
+        .status-dot.ready { background-color: var(--success); }
+        .status-dot.error { background-color: var(--danger); }
+        .status-dot.processing { background-color: var(--warning); }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            padding: 30px;
+        }
+        
+        @media (max-width: 992px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            padding: 25px;
+            border: 1px solid var(--gray-light);
+        }
+        
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--dark);
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 15px;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 3px rgba(0, 180, 219, 0.2);
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        
+        .file-input-custom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 15px;
+            background-color: var(--light);
+            border: 1px dashed var(--gray);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .file-input-custom:hover {
+            background-color: #e9ecef;
+        }
+        
+        .file-input-text {
+            color: var(--gray);
+        }
+        
+        .file-input-icon {
+            color: var(--primary);
+        }
+        
+        .slider-container {
+            margin-top: 10px;
+        }
+        
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+            font-size: 0.85rem;
+            color: var(--gray);
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            height: 8px;
+            border-radius: 5px;
+            background: var(--gray-light);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: var(--primary-light);
+            transform: scale(1.1);
+        }
+        
+        .btn {
+            display: inline-block;
+            font-weight: 500;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: middle;
+            user-select: none;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(to right, var(--primary), var(--primary-light));
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(30, 60, 114, 0.3);
+        }
+        
+        .btn-block {
+            display: block;
+            width: 100%;
+        }
+        
+        .visualization-container {
+            margin-top: 30px;
+        }
+        
+        .visualization-placeholder {
+            height: 300px;
+            background: var(--light);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray);
+            border: 1px dashed var(--gray-light);
+        }
+        
+        .results-summary {
+            background: var(--light);
+            border-radius: var(--border-radius);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .summary-item {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+        
+        .summary-label {
+            font-size: 0.85rem;
+            color: var(--gray);
+        }
+        
+        .log-section {
+            margin-top: 30px;
+        }
+        
+        .log-table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--border-radius);
+            margin-top: 15px;
+        }
+        
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .log-table th {
+            position: sticky;
+            top: 0;
+            background: var(--primary);
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+        }
+        
+        .log-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        
+        .log-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .log-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .log-anomaly {
+            color: var(--danger);
+            font-weight: 600;
+        }
+        
+        .log-normal {
+            color: var(--success);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 10px;
+        }
+        
+        .badge-danger {
+            color: white;
+            background-color: var(--danger);
+        }
+        
+        .badge-success {
+            color: white;
+            background-color: var(--success);
+        }
+        
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--gray);
+            font-size: 0.9rem;
+            border-top: 1px solid var(--gray-light);
+            margin-top: 30px;
+        }
+        
+        .help-text {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 5px;
+        }
+        
+        .status-box {
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: var(--border-radius);
+            font-weight: bold;
+        }
+        
+        .status-upload {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .status-complete {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .detection-plot {
+            width: 100%;
+            height: auto;
+            border: 1px solid var(--gray-light);
+            border-radius: var(--border-radius);
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>DDoS Anomaly Detection</h1>
+            <p>Single-stage detection system for identifying DDoS attacks in network traffic</p>
+            <div class="status-indicator">
+                <div class="status-dot {% if 'ERROR' in status_message %}error{% elif 'Complete' in status_message %}ready{% else %}processing{% endif %}"></div>
+                <span>
+                    {% if 'ERROR' in status_message %}Error
+                    {% elif 'Complete' in status_message %}System Ready
+                    {% else %}Processing Data...
+                    {% endif %}
+                </span>
+            </div>
+        </header>
+        
+        <div class="status-box 
+            {% if 'ERROR' in status_message %}status-error
+            {% elif 'Complete' in status_message %}status-complete
+            {% else %}status-upload
+            {% endif %}"
+        >
+            Status: {{ status_message | safe }}
+        </div>
+        
+        <div class="main-content">
+            <div class="card">
+                <h2 class="card-title">Upload & Analyze</h2>
+                
+                <form method="POST" action="/" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label" for="data_file">Upload Network Data</label>
+                        <div class="file-input-wrapper">
+                            <input type="file" name="data_file" id="data_file" accept=".csv" required>
+                            <div class="file-input-custom">
+                                <span class="file-input-text" id="file-name">Choose CSV file...</span>
+                                <span class="file-input-icon">📁</span>
+                            </div>
+                        </div>
+                        <div class="help-text">The application will automatically detect Flow Packets/s or Flow Bytes/s columns</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label" for="z_threshold">
+                            Detection Sensitivity (Z-Score Threshold)
+                            <span id="z_val_display" style="color: var(--primary); font-weight: 600;">{{ z_threshold }}</span>
+                        </label>
+                        <input type="range" id="z_threshold" name="z_threshold" min="2.0" max="5.0" step="0.1" value="{{ z_threshold }}" class="form-control">
+                        <div class="slider-labels">
+                            <span>High Sensitivity (2.0)</span>
+                            <span>Balanced (3.0)</span>
+                            <span>Low Sensitivity (5.0)</span>
+                        </div>
+                        <div class="help-text">Lower values detect more anomalies (potential false positives), higher values detect only extreme anomalies</div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-block">
+                        Analyze Data & Detect Anomalies
+                    </button>
+                </form>
+                
+                <div class="visualization-container">
+                    <h3 class="card-title">Detection Visualization</h3>
+                    
+                    {% if plot_data and plot_data != 'placeholder_plot' %}
+                        <img src="data:image/png;base64,{{ plot_data }}" alt="DDoS Detection Plot" class="detection-plot">
+                    {% else %}
+                        <div class="visualization-placeholder">
+                            <p>Upload a file and run analysis to generate visualization</p>
+                        </div>
+                    {% endif %}
+                    
+                    {% if summary %}
+                    <div class="results-summary">
+                        <h4>Analysis Results Summary</h4>
+                        <div class="summary-grid">
+                            <div class="summary-item">
+                                {% set anomaly_count = detection_log | selectattr("is_anomaly") | list | length %}
+                                <div class="summary-value">{{ anomaly_count }}</div>
+                                <div class="summary-label">Anomalies Detected</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value">{{ summary.total_rows_analyzed }}</div>
+                                <div class="summary-label">Data Points</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value">{{ summary.rate_column }}</div>
+                                <div class="summary-label">Rate Column</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="summary-value">{{ summary.z_threshold }}</div>
+                                <div class="summary-label">Z-Score Threshold</div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2 class="card-title">Detection Log</h2>
+                <p>Detailed log of detected anomalies and normal traffic patterns</p>
+                
+                <div class="log-table-container">
+                    <table class="log-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 25%;">Timestamp</th>
+                                <th style="width: 35%;">Status</th>
+                                <th style="width: 20%; text-align: right;">Rate Value</th>
+                                <th style="width: 20%; text-align: right;">Z-Score</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if detection_log %}
+                                {% for log in detection_log %}
+                                <tr class="{% if log.is_anomaly %}log-anomaly{% else %}log-normal{% endif %}">
+                                    <td>{{ log.timestamp }}</td>
+                                    <td>
+                                        {% if log.is_anomaly %}
+                                        <span class="badge badge-danger">{{ log.status }}</span>
+                                        {% else %}
+                                        {{ log.status }}
+                                        {% endif %}
+                                    </td>
+                                    <td style="text-align: right;">{{ log.rate | round(2) }}</td>
+                                    <td style="text-align: right;">{{ log.z_score | round(2) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" style="text-align: center; padding: 40px; color: var(--gray);">
+                                        No data analyzed yet. Upload a CSV file and run analysis to see detection log.
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if summary %}
+                <div class="log-section">
+                    <h3 class="card-title">Detection Statistics</h3>
+                    <div class="summary-grid">
+                        <div class="summary-item">
+                            {% set anomaly_count = detection_log | selectattr("is_anomaly") | list | length %}
+                            {% set anomaly_rate = (anomaly_count / detection_log | length * 100) if detection_log | length > 0 else 0 %}
+                            <div class="summary-value">{{ "%.2f"|format(anomaly_rate) }}%</div>
+                            <div class="summary-label">Anomaly Rate</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">{{ summary.training_rows }}</div>
+                            <div class="summary-label">Baseline Rows</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">{{ "%.2f"|format(summary.mean) }}</div>
+                            <div class="summary-label">Mean</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">{{ "%.2f"|format(summary.std) }}</div>
+                            <div class="summary-label">Std Dev</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <footer>
+            <p>DDoS Anomaly Detection System &copy; 2023 | Single-Stage Detection Algorithm</p>
+        </footer>
+    </div>
+
+    <script>
+        // File input display
+        document.getElementById('data_file').addEventListener('change', function(e) {
+            const fileName = e.target.files[0] ? e.target.files[0].name : 'Choose CSV file...';
+            document.getElementById('file-name').textContent = fileName;
+        });
+        
+        // Z-score slider
+        const zSlider = document.getElementById('z_threshold');
+        const zValueDisplay = document.getElementById('z_val_display');
+        
+        if(zSlider) {
+            zSlider.addEventListener('input', function() {
+                zValueDisplay.textContent = this.value;
+            });
+        }
+        
+        // Update status indicator based on current state
+        document.addEventListener('DOMContentLoaded', function() {
+            const statusMessage = document.querySelector('.status-box').textContent;
+            const statusIndicator = document.querySelector('.status-indicator span');
+            const statusDot = document.querySelector('.status-dot');
+            
+            if (statusMessage.includes('ERROR')) {
+                statusIndicator.textContent = 'Error';
+                statusDot.className = 'status-dot error';
+            } else if (statusMessage.includes('Complete')) {
+                statusIndicator.textContent = 'System Ready';
+                statusDot.className = 'status-dot ready';
+            } else {
+                statusIndicator.textContent = 'Processing Data...';
+                statusDot.className = 'status-dot processing';
+            }
+        });
+    </script>
+</body>
+</html>
