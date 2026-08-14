@@ -244,6 +244,6 @@ The Detection Log provides a structured view of analyzed traffic records, includ
 
 After processing the dataset, the dashboard presents the statistical analysis and graphical results to help users understand detected traffic anomalies.
 
-### 📸 Dashboard Screenshot
+## 📸 Project Interface
 
-![DDoS Anomaly Detection Dashboard](docs/dashboard.png)
+![DDoS Anomaly Detection Dashboard](docs/Screenshot%202026-08-13%20122539.png)
